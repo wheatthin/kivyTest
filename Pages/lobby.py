@@ -1,4 +1,5 @@
 import asyncio
+from asyncio import TimeoutError
 import websockets
 import json
 from kivy.uix.boxlayout import BoxLayout
@@ -77,9 +78,18 @@ class Lobby(Screen):
         self.manager.current = 'main_menu'
 
     async def receive_updates(self, match_id):
-        async with websockets.connect("ws://localhost:8765") as websocket:
-            async for message in websocket:
-                data = json.loads(message)
-                if data.get("action") == "update_lobby" and data.get("match_id") == match_id:
-                    self.players = data["players"]
-                    self.update_players_list()
+        try:
+            async with websockets.connect("ws://localhost:8765") as websocket:
+                while True:
+                    try:
+                        message = await asyncio.wait_for(websocket.recv(), timeout=10)  # 10-second timeout
+                        data = json.loads(message)
+                        if data.get("action") == "update_lobby" and data.get("match_id") == match_id:
+                            self.players = data["players"]
+                            self.update_players_list()
+                    except TimeoutError:
+                        print("No updates received. Retrying...")
+        except Exception as e:
+            print(f"Error in receive_updates: {e}")
+
+    
